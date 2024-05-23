@@ -1,16 +1,16 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
-	"fmt"
-	"html/template"
 	"log"
+	"net/http"
+	"template-service/renderer"
 
 	"github.com/gofiber/fiber/v3"
 )
 
 type data struct {
+	Engine   string      `json:"engine"`
 	Template string      `json:"template"`
 	Model    interface{} `json:"model"`
 }
@@ -19,11 +19,9 @@ func main() {
 
 	app := fiber.New()
 
-	// Define a route for the GET method on the root path '/'
 	app.Get("/", func(c fiber.Ctx) error {
 
-		// Send a string response to the client
-		return c.SendString("Hello, World 👋!")
+		return c.SendString("This is a simple template render service. Use POST method to render templates.")
 	})
 
 	app.Post("/", func(c fiber.Ctx) error {
@@ -32,23 +30,25 @@ func main() {
 		var request data
 		err := json.Unmarshal(bodyData, &request)
 		if err != nil {
-			fmt.Println("Error:", err)
-			return err
+			log.Printf("Error: %s\n", err)
+			return c.Status(http.StatusBadRequest).SendString(err.Error())
 		}
 
-		tmpl, err := template.New("test").Parse(request.Template)
+		eng := renderer.GetRenderer(request.Engine)
+
+		if eng == nil {
+			log.Printf("Invalid Engine: %s\n", request.Engine)
+			return c.Status(http.StatusBadRequest).SendString(err.Error())
+		}
+
+		out, err := eng.Render(request.Template, request.Model)
 		if err != nil {
-			panic(err)
+			log.Printf("Error: %s\n", err)
+			return c.Status(http.StatusBadRequest).SendString(err.Error())
 		}
 
-		var doc bytes.Buffer
+		return c.SendString(out)
 
-		err = tmpl.Execute(&doc, request.Model)
-		if err != nil {
-			panic(err)
-		}
-
-		return c.SendString(doc.String())
 	})
 
 	log.Fatal(app.Listen(":3100"))
